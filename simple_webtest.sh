@@ -12,6 +12,7 @@ output_format="actual_url:\\t%{url_effective};speed:\\t%{speed_download};code:\\
 lookup_time:\\t%{time_namelookup};connect_time:\\t%{time_connect};total_time:\\t%{time_total};\\n\
 size:\\t%{size_download}"
 persistentdir="/tmp/simplehttp"
+input_file="/home/ben/Development/webperf/simple_webtest/test1/china.txt"
 
 max_curl_filesize=$((2* 1024 * 1024))
 
@@ -20,21 +21,23 @@ max_curl_filesize=$((2* 1024 * 1024))
 # expected syntax: setup
 setup()
 {
+    echo "Setting up"
     timestamp=`date +%s`
     #first, setup a tmp directory for files like the downloaded html
     tempdir=${persistentdir}/tempdir_${timestamp}
     mkdir -p $tempdir; cd $tempdir || exit 1
     
     #now setup files which will be deleted later
-    $htmloutput = ${tempdir}/htmloutput.html
+    htmloutput=${tempdir}/htmloutput.html
 
     #and persistent storage
-    output_file=${persistentdir}/results_${timestamp}
+    output_file=${persistentdir}/results_${timestamp}.txt
 }
 
 #cleanup: this function will delete all temporary files and do cleanup before the script exits
 cleanup()
 {
+    echo "Cleaning up"
     rm -r $tempdir
 }
 
@@ -43,35 +46,37 @@ cleanup()
 #Note: this function is copied from Giuseppe's measurement script because it seems to be an efficient way to randomize lists
 pick_elem()
 {
-    if [$# -eq 1]; then n=$1
-    else return 1; fi
+    if [ $# -eq '1' ]; then
+    n=$1
+    else return 0; fi
 
     #seed the random number generator
-    rnd_seed = $((`date`))
+    rnd_seed=$timestamp
 
     #use awk to read the list in, then sort it or return a random element
-    awk 'BEGIN{srand'$rnd_seed'}
-         {l[NR] = $0}
-         END {if (FNR==0){exit};
-              for (i=1; *i <="$pick" && i <=NR); i++){
-                   n=int(rand()*(NR-i+1))+i
-                   print l[n];l[n]=l[i];
-              }
-         }'
+    awk 'BEGIN {srand('$rnd_seed')}
+               {l[NR]=$0;}
+         END   {if (FNR==0){exit};
+                 for (i=1;(i<=pick && i<=NR);i++){
+                     n=int(rand()*(NR-i+1))+i;
+                     print l[n];l[n]=l[i];
+                 }
+               }'pick=$n
 }
 
 #measure_site: this function will perform the actual measurements.
 # expected syntax: measure_site url
 measure_site()
 {
-    curl $1 --max-filesize $max_curl_filesize -L --max-redirs $num_redirects -A "$user_agent" -w $output_format -o $htmloutput >> $output_file
+    echo `curl $1 --max-filesize $max_curl_filesize -L --max-redirs $num_redirects -A "$user_agent" -w $output_format -o $htmloutput`
 }
 
 #run_measurements: will run the measurements for this test.
 # syntax: run_measurements
 run_measurements()
 {
-    for $url in `cat $input_file | pick_elem 100`; do
+    echo "Measuring"
+    for url in `cat $input_file | pick_elem 100`; do
 	measure_site $url
 	rm $htmloutput
     done
