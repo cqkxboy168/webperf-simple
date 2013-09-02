@@ -1,0 +1,7 @@
+
+#simple_webtest.sh
+#Ben Jones
+#Sep 2013
+#simple_webtest.sh: this script is designed to run on the bismark platform. The script will fetch a number of urls and determine the
+# the performance of these webpages. The performance data will allow us to see performance difference inside and outside of countries
+
