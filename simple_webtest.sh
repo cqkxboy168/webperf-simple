@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/ash
 #simple_webtest.sh
 #Ben Jones
 #Sep 2013
@@ -12,9 +12,12 @@ output_format="actual_url:\\t%{url_effective};speed:\\t%{speed_download};code:\\
 lookup_time:\\t%{time_namelookup};connect_time:\\t%{time_connect};total_time:\\t%{time_total};\\n\
 size:\\t%{size_download};"
 persistentdir="/tmp/censorship-performance"
-input_file="/home/ben/Development/webperf/simple_webtest/test1/china.txt" #the location of the url list to be tested
+url_file="/home/ben/Development/webperf/simple_webtest/test1/india.txt" #the location of the url list to be tested
+urls_to_test=5
 min_wait=1 #the minimum time to wait between web tests
-max_wait=30 #the maximum time to wait between web tests
+max_wait=2 #the maximum time to wait between web tests
+max_experiment_time=1 #experiment must be done in 120 seconds
+url_timeout=60 #after 60 seconds, timeout the url
 max_curl_filesize=$((2* 1024 * 1024))
 
 #FUNCTIONS
@@ -24,41 +27,34 @@ setup()
 {
     echo "Setting up"
     timestamp=`date +%s`
-    #first, setup a tmp directory for files like the downloaded html
-    tempdir=${persistentdir}/tempdir_${timestamp}
-    mkdir -p $tempdir; cd $tempdir || exit 1
+    test_start_time=$timestamp
     
-    # no saved device_id
-    if [ "$DEVICE_ID" = "" ]; then
-	# read DEVICE_ID (linux-dbus):
-	[ -e /var/lib/dbus/machine-id ] && DEVICE_ID=`cat /var/lib/dbus/machine-id`
+    #find the device ID, aka the mac address
+    DEVICE_ID=`/sbin/ifconfig | awk '{if (NR == 1){ print $5}}'`
 
-	# read DEVICE_ID (bismark):
-	[ -e /etc/bismark/bismark.conf ] && . /etc/bismark/bismark.conf
-
-
-	if [ "$DEVICE_ID" = "" ]; then
-		DEVICE_ID=`uuidgen`;
-		echo "DEVICE_ID=$DEVICE_ID" >> $configfile
-	fi
+    #make the persistent directory if it doesn't exist (used to store the randomized url list)
+    if [ ! -e "$persistentdir" ]; then
+	#create the directory
+	mkdir -p $persistentdir
     fi
-    DEVICE_ID=${DEVICE_ID}-${clientnotes}
-
-    #now setup files which will be deleted later
-    htmloutput=${tempdir}/htmloutput.html
 
     #and persistent files (eventually deleted after uploads)
-    output_file=${persistentdir}/http_results_${timestamp}.txt
-    upload_file=/censorship-performance/http_results_${DEVICE_ID}_${timestamp}
-
-
+    output_dir=${persistentdir}/http_${DEVICE_ID}_${timestamp}
+    mkdir -p $output_dir; cd $output_dir || exit 1
+    output_file=${output_dir}/http_results_${DEVICE_ID}_${timestamp}.txt
+    upload_dir=/tmp/bismark-uploads/censorship-performance/
+    
+    #create a file for the variable index if it does not exist
+    index_file=${persistentdir}/index.var
+    if [ ! -e $index_file ]; then
+	touch $index_file
+    fi
 }
 
 #cleanup: this function will delete all temporary files and do cleanup before the script exits
 cleanup()
 {
     echo "Cleaning up"
-    rm -r $tempdir
 }
 
 #pick_elem: this function will randomly select n elements from a list. If all elements are selected, the list order will be randomized
@@ -85,18 +81,59 @@ pick_elem()
                }'
 }
 
+#create_random_url_list: take the url list, put it in random order, and write it out as a new file
+#Note: will overwrite input_file if it exists
+create_random_url_list()
+{
+    echo "Randomizing the url order"
+    #create a file to hold the url list
+    input_file=`mktemp`
+    #randomize the url list and write it out
+    cat $url_file | pick_elem > $input_file
+    echo $input_file
+}
+
+#pick_random_urls: will select the $index through $index + $urls_to_test urls and print them to stdout
+pick_random_urls()
+{
+    exec 6<> $input_file
+    cur_loc=0
+    endoflist=`expr $index + $urls_to_test` 
+
+    while [ "$cur_loc" -lt "$endoflist" ]; do
+	    read line <&6
+	    if [ "$cur_loc" -ge "$index" ]; then
+		echo $line
+	    fi
+	    cur_loc=`expr $cur_loc + 1`
+    done
+    
+    #export the index variable to disc and the name of the input file
+    index=`expr $index + 5`
+    echo index="$index" > $index_file
+    echo input_file="$input_file" >> $index_file
+}
+
 #upload_data: upload the data to the BISmark servers
 upload_data()
 {
-    mv $output_file $output_dir
+    #compress the directory
+    tar -zcf  ${output_dir}.tar.gz  $output_dir
+    mv ${output_dir}.tar.gz $upload_dir
+
+    #delete the content
+    cd $persistentdir
+    rm -rf $output_dir
 }
 
 #measure_site: this function will perform the actual measurements.
 # expected syntax: measure_site url
 measure_site()
 {
+    #create a filename to store the html and headers in- just the name of the website
+    pageoutput=${output_dir}/${1}
     printf "site:\t%s;time:\t%s\n" "$1" `date +%s`>> $output_file
-    curl $1 --max-filesize $max_curl_filesize -L --max-redirs $num_redirects -A "$user_agent" -w $output_format -o $htmloutput >> $output_file
+    curl $1 --max-filesize $max_curl_filesize -L --max-redirs $num_redirects -A "$user_agent" -w $output_format -o ${pageoutput}.html -D ${pageoutput}.headers --connect-timeout $url_timeout >> $output_file
     printf "return_code:\t%s\n" "$?" >> $output_file
 }
 
@@ -105,18 +142,36 @@ measure_site()
 run_measurements()
 {
     echo "Measuring"
-    #randomize the order of the urls, then test all of them
-    for url in `cat $input_file | pick_elem`; do
+    #we store the variable index to disc so we have persistent data between reboots-> the file just stores the file
+    . $index_file
+
+    #randomize the order of the urls if we haven't already
+    #we test whether or not to create the new url list by checking if the index exists or if it is >=100
+    
+    if [ "$index" = "" ] || [ $index -ge 99 ]
+    then
+	#set index to 0 and create the randomized url list
+	index=0
+	create_random_url_list
+    fi
+
+    for url in `pick_random_urls $index`; do
+	echo $url
 	measure_site $url
-	rm $htmloutput
-	#do a random wait between each element
-	sleep `seq $min_wait $max_wait | pick_elem 1`
+	#if we are over time, then break
+	time_elapsed=$((`date +%s` - test_start_time))
+	if [ $time_elapsed -gt $max_experiment_time ]; then
+	    echo "Overtime. Stopping test"
+	    echo "Could not test other urls- experiment is out of time" >>  $output_file
+	    break #break out of the loop and cleanup
+	fi
     done
 }
 
 
-#MAIN- START- here is where the code is actually executed
+#MAIN- START- here is where the code is actually 
 setup
 run_measurements
 upload_data
 cleanup
+
