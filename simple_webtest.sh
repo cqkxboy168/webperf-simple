@@ -7,16 +7,17 @@
 
 #configuration parameters
 user_agent='Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.0)'
-num_redirects=5
+#num_redirects=5 the initial version will not be using redirects so that we just get the first http page and don't have to do HTTPS validation
 output_format="actual_url:\\t%{url_effective};speed:\\t%{speed_download};code:\\t%{http_code}\\n\
 lookup_time:\\t%{time_namelookup};connect_time:\\t%{time_connect};total_time:\\t%{time_total};\\n\
 size:\\t%{size_download};"
 persistentdir="/tmp/censorship-performance"
-url_file="/home/ben/Development/webperf/simple_webtest/test1/india.txt" #the location of the url list to be tested
+country="southafrica"
+url_file=/tmp/censorship-performance/${country}.txt #the location of the url list to be tested
 urls_to_test=5
 min_wait=1 #the minimum time to wait between web tests
 max_wait=2 #the maximum time to wait between web tests
-max_experiment_time=1 #experiment must be done in 120 seconds
+max_experiment_time=120 #experiment must be done in 120 seconds
 url_timeout=60 #after 60 seconds, timeout the url
 max_curl_filesize=$((2* 1024 * 1024))
 
@@ -29,8 +30,12 @@ setup()
     timestamp=`date +%s`
     test_start_time=$timestamp
     
-    #find the device ID, aka the mac address
-    DEVICE_ID=`/sbin/ifconfig | awk '{if (NR == 1){ print $5}}'`
+    #find the device ID, aka the mac address (since this is used in filenames, we replace the : with a -
+    DEVICE_ID=`/sbin/ifconfig | awk '{if (NR == 1){ print $5}}'|  awk 'BEGIN { FS=":";} 
+       {for(i=1; i <= NF; i++){
+	    if(i != NF) printf("%s-", $i); 
+	    else printf("%s", $i);}}'`
+
 
     #make the persistent directory if it doesn't exist (used to store the randomized url list)
     if [ ! -e "$persistentdir" ]; then
@@ -39,9 +44,10 @@ setup()
     fi
 
     #and persistent files (eventually deleted after uploads)
-    output_dir=${persistentdir}/http_${DEVICE_ID}_${timestamp}
+    output_dir_name=http_${DEVICE_ID}_${timestamp}
+    output_dir=${persistentdir}/${output_dir_name}
     mkdir -p $output_dir; cd $output_dir || exit 1
-    output_file=${output_dir}/http_results_${DEVICE_ID}_${timestamp}.txt
+    output_file=${output_dir}/http_results_${DEVICE_ID}_${timestamp}_${country} #includes the .txt from url_file-> this gives us the country
     upload_dir=/tmp/bismark-uploads/censorship-performance/
     
     #create a file for the variable index if it does not exist
@@ -49,12 +55,20 @@ setup()
     if [ ! -e $index_file ]; then
 	touch $index_file
     fi
+
+    #if commands are different on busybox, then use a variable for their version
+    mktemp='/bin/busybox mktemp'
+    cat='/bin/busybox cat'
+
 }
 
 #cleanup: this function will delete all temporary files and do cleanup before the script exits
 cleanup()
 {
     echo "Cleaning up"
+    #delete the content
+    cd $persistentdir
+    rm -rf $output_dir
 }
 
 #pick_elem: this function will randomly select n elements from a list. If all elements are selected, the list order will be randomized
@@ -85,29 +99,43 @@ pick_elem()
 #Note: will overwrite input_file if it exists
 create_random_url_list()
 {
+    if [ ! "$input_file" = "" ]; then #if the old file exists, delete it
+	rm -f $input_file
+    fi
+	
+    if [ ! -e "$url_file" ]; then #if the url file does not exist, then print an error message and exit
+	echo "No URL file detected. Exiting"
+	#perform any cleanup necessary
+	cleanup
+	exit 1
+    fi
+	
     echo "Randomizing the url order"
     #create a file to hold the url list
+    cd $persistentdir
     input_file=`mktemp`
+#    input_file=`pwd`/`$mktemp` #this still won't work on debian, but necessary on routers
     #randomize the url list and write it out
-    cat $url_file | pick_elem > $input_file
+    $cat $url_file | pick_elem > $input_file
     echo $input_file
 }
 
 #pick_random_urls: will select the $index through $index + $urls_to_test urls and print them to stdout
 pick_random_urls()
 {
-    exec 6<> $input_file
     cur_loc=0
     endoflist=`expr $index + $urls_to_test` 
 
-    while [ "$cur_loc" -lt "$endoflist" ]; do
-	    read line <&6
-	    if [ "$cur_loc" -ge "$index" ]; then
-		echo $line
-	    fi
-	    cur_loc=`expr $cur_loc + 1`
-    done
-    
+    while read line; do
+	if [ "$cur_loc" -ge "$endoflist" ]; then
+	    break
+	fi
+	if [ "$cur_loc" -ge "$index" ]; then
+	    echo $line
+	fi
+	cur_loc=`expr $cur_loc + 1`
+    done < $input_file
+
     #export the index variable to disc and the name of the input file
     index=`expr $index + 5`
     echo index="$index" > $index_file
@@ -117,13 +145,10 @@ pick_random_urls()
 #upload_data: upload the data to the BISmark servers
 upload_data()
 {
-    #compress the directory
-    tar -zcf  ${output_dir}.tar.gz  $output_dir
-    mv ${output_dir}.tar.gz $upload_dir
-
-    #delete the content
+    #move to the persistent directory (which contains the output_dir) and compress output_dir
     cd $persistentdir
-    rm -rf $output_dir
+    tar -zcf  ${output_dir_name}.tar.gz  ${output_dir_name}
+    mv ${output_dir_name}.tar.gz $upload_dir
 }
 
 #measure_site: this function will perform the actual measurements.
@@ -133,7 +158,7 @@ measure_site()
     #create a filename to store the html and headers in- just the name of the website
     pageoutput=${output_dir}/${1}
     printf "site:\t%s;time:\t%s\n" "$1" `date +%s`>> $output_file
-    curl $1 --max-filesize $max_curl_filesize -L --max-redirs $num_redirects -A "$user_agent" -w $output_format -o ${pageoutput}.html -D ${pageoutput}.headers --connect-timeout $url_timeout >> $output_file
+    curl $1 --max-filesize $max_curl_filesize -A "$user_agent" -w $output_format -o ${pageoutput}.html -D ${pageoutput}.headers --max-time $url_timeout >> $output_file
     printf "return_code:\t%s\n" "$?" >> $output_file
 }
 
@@ -155,6 +180,7 @@ run_measurements()
 	create_random_url_list
     fi
 
+    
     for url in `pick_random_urls $index`; do
 	echo $url
 	measure_site $url
@@ -168,10 +194,8 @@ run_measurements()
     done
 }
 
-
 #MAIN- START- here is where the code is actually 
 setup
 run_measurements
 upload_data
 cleanup
-

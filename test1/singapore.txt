@@ -79,7 +79,6 @@ www.tripadvisor.com
 www.dropbox.com
 www.zalora.sg
 www.flickr.com
-www.akamaihd.net
 www.fiverr.com
 www.adobe.com
 www.avg.com
@@ -90,6 +89,6 @@ www.therealsingapore.com
 www.ntu.edu.sg
 www.dailymotion.com
 www.mediafire.com
-www.singpass-services.gov.sg
 www.reference.com
 www.alldealsasia.com
+www.singpass-services.gov.sg

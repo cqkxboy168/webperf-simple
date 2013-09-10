@@ -51,7 +51,6 @@ www.fc2.com
 www.google.com.mx
 www.mercadolibre.com.mx
 www.eluniversal.com.mx
-www.xvideos.com
 www.taringa.net
 www.unam.mx
 www.vube.com
@@ -61,8 +60,6 @@ www.cnn.com
 www.bancomer.com.mx
 www.milenio.com
 www.banamex.com.mx
-www.akamaihd.net
-www.t.co
 www.hootsuite.com
 www.wordreference.com
 www.bbvanet.com.mx
