@@ -12,8 +12,7 @@ output_format="actual_url:\\t%{url_effective};speed:\\t%{speed_download};code:\\
 lookup_time:\\t%{time_namelookup};connect_time:\\t%{time_connect};total_time:\\t%{time_total};\\n\
 size:\\t%{size_download};"
 persistentdir="/tmp/censorship-performance"
-country="southafrica"
-url_file=/tmp/censorship-performance/${country}.txt #the location of the url list to be tested
+url_dload_loc=ben.noise.gatech.edu/censorship-performance/simple-http
 urls_to_test=5
 min_wait=1 #the minimum time to wait between web tests
 max_wait=2 #the maximum time to wait between web tests
@@ -33,7 +32,7 @@ setup()
     #find the device ID, aka the mac address (since this is used in filenames, we replace the : with a -
     DEVICE_ID=`/sbin/ifconfig | awk '{if (NR == 1){ print $5}}'|  awk 'BEGIN { FS=":";} 
        {for(i=1; i <= NF; i++){
-	    if(i != NF) printf("%s-", $i); 
+	    if(i != NF) printf("%s", $i); 
 	    else printf("%s", $i);}}'`
 
 
@@ -59,6 +58,13 @@ setup()
     #if commands are different on busybox, then use a variable for their version
     mktemp='/bin/busybox mktemp'
     cat='/bin/busybox cat'
+
+    #and download the file of urls
+    url_file=${persistentdir}/urllist.txt
+    download_url=${url_dload_loc}/${DEVICE_ID}.txt
+    echo $download_url
+    curl $download_url > $url_file
+    
 
 }
 
@@ -113,8 +119,8 @@ create_random_url_list()
     echo "Randomizing the url order"
     #create a file to hold the url list
     cd $persistentdir
-    input_file=`mktemp`
-#    input_file=`pwd`/`$mktemp` #this still won't work on debian, but necessary on routers
+#    input_file=`mktemp`
+    input_file=`pwd`/`$mktemp` #this still won't work on debian, but necessary on routers
     #randomize the url list and write it out
     $cat $url_file | pick_elem > $input_file
     echo $input_file
