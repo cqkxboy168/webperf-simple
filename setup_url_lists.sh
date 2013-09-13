@@ -7,8 +7,13 @@ copy_file()
     sudo cp ~/Development/webperf/simple_webtest/test1/$1 /var/www/censorship-performance/simple-http/$2
 }
 
+update_home_router()
+{
+    copy_file india.txt C43DC7B0AE9F.txt #copy a file for my home router
+}
 update_tests()
 {
+    copy_file india.txt C43DC7B0AE9F.txt #copy a file for my home router
     copy_file india.txt 4c72b94287a1.txt #copy a file for my workstation
     copy_file india.txt 204E7F4A7478.txt #copy a file for the .6 router attached to beagle
 }
@@ -111,5 +116,5 @@ update_all()
     update_thailand
 }
 
-update_all
+update_home_router
 
