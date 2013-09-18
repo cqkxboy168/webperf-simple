@@ -13,9 +13,10 @@ update_home_router()
 }
 update_tests()
 {
-    copy_file india.txt OWC43DC7B0AE9F.txt #copy a file for my home router
+    update_home_router #copy a file for my home router
     copy_file india.txt 4c72b94287a1.txt #copy a file for my workstation
     copy_file india.txt OW204E7F4A7478.txt #copy a file for the .6 router attached to beagle
+    copy_file indonesia.txt OWC43DC7B0AE63.txt
 }
 
 update_hongkong()
@@ -116,5 +117,5 @@ update_all()
     update_thailand
 }
 
-update_all
+update_tests
 
