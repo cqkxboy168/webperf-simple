@@ -4,7 +4,7 @@
 
 copy_file()
 {
-    sudo cp ~/Development/webperf/simple_webtest/test1/$1 /var/www/censorship-performance/simple-http/$2
+    sudo cp ~/Development/webperf/simple_webtest/test1/$1 /var/www/external/censorship-performance/simple-http/$2
 }
 
 update_home_router()
@@ -102,6 +102,19 @@ update_thailand()
     copy_file thailand.txt OW204E7F4A7BA1.txt
     copy_file thailand.txt OW204E7F80764A.txt
 }
+
+update_initial_deployment()
+{
+    copy_file china.txt OWC43DC7B0AEDB.txt
+    copy_file hongkong.txt OWC43DC78EE081.txt
+    copy_file india.txt OWC43DC7B0AE78.txt
+    copy_file indonesia.txt OWC43DC7A376D3.txt
+    copy_file japan.txt OWC43DC79DE0F7.txt
+    copy_file mexico.txt OWC43DC7B0AE54.txt
+    copy_file pakistan.txt OWC43DC7A3EE43.txt
+    copy_file singapore.txt OWC43DC7A37C01.txt
+    copy_file southafrica.txt OWC43DC7A3F0D4.txt
+}
 #update each category of files in turn
 update_all()
 {
@@ -117,5 +130,5 @@ update_all()
     update_thailand
 }
 
-update_tests
+update_initial_deployment
 
